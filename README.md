@@ -1,0 +1,1 @@
+Key rotator wrapper around gemini's api for github pilot.
