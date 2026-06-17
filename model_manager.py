@@ -156,5 +156,27 @@ class ModelManager:
 
         with open(DATA_FILE, "w", encoding="utf-8") as file:
             json.dump(data, file, indent=4)
+
+    """ Call this after loading from env and it will overwrite some data with prior saved """
+    def load(self):
+        with open(DATA_FILE, "r") as file:
+            data = json.load(file)
+
+        for key, key_infos in data.items():
+            if key not in self.key_infos.keys(): continue
+            
+            relevant_key_infos = self.key_infos[key]
+            for model, saved_info in key_infos.items():
+                if model not in relevant_key_infos.model_usages.keys(): continue
+
+                relevant_key_infos.model_usages[request_date].RPD_Made = int(saved_info["RPD"])
+
+                request_date = datetime.fromisoformat(saved_info["last_request_date"]).date()
+                relevant_key_infos.model_usages[model].last_request_date = request_date
+
+
+
+
+        
         
 
