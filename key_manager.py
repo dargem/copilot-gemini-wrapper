@@ -76,8 +76,7 @@ class ModelUsage:
             self.rolling_TPM += tokens_used
 
 class KeyInfo:
-    def __init__(self, key):
-        self.key = key
+    def __init__(self):
         self.model_usages = {model: ModelUsage(limit) for model, limit in model_limits.items()}
 
     def has_model_available(self, model):
@@ -97,29 +96,36 @@ class APIRecord:
 
 class KeyManager:
     def __init__(self):
-        self.key_infos = [KeyInfo(key) for id, key in os.environ.items() if "KEY_" in id]
+        self.key_infos = {key : KeyInfo() for id, key in os.environ.items() if "KEY_" in id}
 
     def reserve_model(self, model) -> APIRecord:
-        for key_info in self.key_infos:
-            if not key_info.has_model_available():
+        for key, info in self.key_infos.items():
+            if not info.has_model_available():
                 continue
 
-            return APIRecord(key_info.key, model, key_info.reserve_model(model))
+            return APIRecord(key, model, info.reserve_model(model))
         
         # In this case no models are available of this type so throw
         raise Exception("No keys have this model currently available")
     
-    def reserve_best_model(self) -> Record:
-        APIRecord = None
-
+    def reserve_best_model(self) -> APIRecord:
         for model in model_limits.keys():
             # The preferred models are inserted first
             try:
                 APIRecord = self.reserve_model(model)
+                return APIRecord
             except Exception:
                 # Give up if no keys are currently available for this model
                 # And try it with just a worse model
                 pass
+
+        # No models were available
+        raise Exception("All keys are exhausted, no models available")
+    
+    def finalize(self, API_record: APIRecord, tokens_used):
+        self.key_infos[API_record.key].finalize(API_record.model, API_record.record, tokens_used)
+
+
             
 
 

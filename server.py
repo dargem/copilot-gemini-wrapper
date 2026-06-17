@@ -6,11 +6,15 @@ import httpx
 import os
 from dotenv import load_dotenv
 
+from key_manager import KeyManager, APIRecord
+
 load_dotenv()
 
 app = FastAPI()
 thought_signatures: dict[str, str] = {}
 THOUGHT_SIGNATURE_SENTINEL = "skip_thought_signature_validator"
+
+key_manager = KeyManager()
 
 def inject_signatures(body: dict) -> None:
     for message in body.get("messages", []):
@@ -43,19 +47,17 @@ async def chat_completions(request: Request):
     body = await request.json()
     inject_signatures(body)
 
-    GEMINI_API_KEY = os.getenv("KEY_0")
-
     # Gemini endpoint that is compatible with the OpenAI schema
     GEMINI_OPENAI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/v1/chat/completions"
 
+    # Add proper selection later
+    api_record: APIRecord = key_manager.reserve_best_model()
+
+    body["model"] = api_record.model
     headers = {
-        "Authorization": f"Bearer {GEMINI_API_KEY}",
+        "Authorization": f"Bearer {api_record.key}",
         "Content-Type": "application/json"
     }
-
-    # Add proper selection later
-    GEMINI_MODEL = "gemini-3.5-flash"
-    body["model"] = GEMINI_MODEL
 
     async def stream_request():
         index_to_id: dict[int, str] = {}
