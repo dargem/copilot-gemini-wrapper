@@ -18,9 +18,14 @@ class Limits:
 model_limits = {
     "gemini-3.5-flash": Limits(5, 250000, 20),
     "gemini-3-flash": Limits(5, 250000, 20),
-    "gemini-3.1-flash-lite": Limits(15, 250000, 500) # but its kinda shit
+    "gemini-3.1-flash-lite": Limits(15, 250000, 500)
 }
 
+class Record:
+    def __init__(self, tokens_used, date):
+        self.tokens = tokens_used
+        self.date = date
+        
 class ModelUsage:
 
     def __init__(self, limits: Limits):
@@ -32,11 +37,18 @@ class ModelUsage:
         self.past_uses = deque()
 
     def check_availability(self):
-        today = datetime.now(ZoneInfo("America/Los_Angeles")).date()
+        """Call before reserving this model to see if you can"""
+        now = datetime.now(ZoneInfo("America/Los_Angeles"))
+        today = now.date()
+
+        while len(self.past_uses) > 0 and now - self.past_uses[0].date > timedelta(minutes=1, seconds=5):
+            record = self.past_uses.popleft()
+            self.rolling_TPM -= record.tokens
 
         if self.last_request_date < today:
             # We can reset our rate limits for today
             self.RPD_Made = 0
+            self.last_request_date = today
         
         if self.RPD_Made >= self.limits.RPD:
             return False
@@ -47,32 +59,35 @@ class ModelUsage:
         
         return True
 
-    def record_use(self, tokens_used):
+    def reserve(self) -> Record:
+        """Call the moment you commit to this key, before the request goes out."""
         current_time = datetime.now(ZoneInfo("America/Los_Angeles"))
-
-        class Record:
-            def __init__(self, tokens_used, date):
-                self.tokens = tokens_used
-                self.date = date
-
         self.last_request_date = current_time.date()
-        self.past_uses.append(Record(tokens_used, current_time))
-        self.rolling_TPM += tokens_used
+
+        record = Record(0, current_time)
+        self.past_uses.append(record)
         self.RPD_Made += 1
+        return record
 
-        while (len(self.past_uses) > 0):
-            # Add some leeway on the 1 minute reset
-            if current_time - self.past_uses[0].date > timedelta(minutes=1, seconds=5):
-                record = self.past_uses.popleft()
-                self.rolling_TPM -= record.tokens
-            else:
-                # Early break its a queue data structure
-                break
-
+    def finalize(self, record, tokens_used):
+        """Call once you know the real token count, after the response completes."""
+        if self.past_uses:
+            record.tokens = tokens_used
+            self.rolling_TPM += tokens_used
 
 class KeyInfo:
     def __init__(self, key):
         self.key = key
+        self.model_usages = {model: ModelUsage(limit) for model, limit in model_limits.items()}
+
+    def has_model_available(self, model):
+        return self.model_usages[model].check_availability()
+    
+    def reserve_model(self, model) -> Record:
+        return self.model_usages[model].reserve()
+    
+    def finalize(self, model, record: Record, tokens_used):
+        self.model_usages[model].finalize(record, tokens_used)
 
 class KeyManager:
     def __init__(self):
