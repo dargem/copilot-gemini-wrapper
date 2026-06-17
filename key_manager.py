@@ -13,7 +13,7 @@ class Limits:
         self.TPM = TPM
         self.RPD = RPD
 
-# Update when changed
+# Update when changed, put preferred models higher
 # https://aistudio.google.com/rate-limit?timeRange=last-28-days
 model_limits = {
     "gemini-3.5-flash": Limits(5, 250000, 20),
@@ -89,7 +89,39 @@ class KeyInfo:
     def finalize(self, model, record: Record, tokens_used):
         self.model_usages[model].finalize(record, tokens_used)
 
+class APIRecord:
+    def __init__(self, api_key, model, record):
+        self.key = api_key
+        self.model = model
+        self.record = record
+
 class KeyManager:
     def __init__(self):
-        self.keys = [key for id, key in os.environ.items() if "KEY_" in id]
+        self.key_infos = [KeyInfo(key) for id, key in os.environ.items() if "KEY_" in id]
+
+    def reserve_model(self, model) -> APIRecord:
+        for key_info in self.key_infos:
+            if not key_info.has_model_available():
+                continue
+
+            return APIRecord(key_info.key, model, key_info.reserve_model(model))
+        
+        # In this case no models are available of this type so throw
+        raise Exception("No keys have this model currently available")
+    
+    def reserve_best_model(self) -> Record:
+        APIRecord = None
+
+        for model in model_limits.keys():
+            # The preferred models are inserted first
+            try:
+                APIRecord = self.reserve_model(model)
+            except Exception:
+                # Give up if no keys are currently available for this model
+                # And try it with just a worse model
+                pass
+            
+
+
+    
 
