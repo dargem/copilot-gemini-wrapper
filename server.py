@@ -1,11 +1,10 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 import json
-import time
 import httpx
-import os
 from dotenv import load_dotenv
-
+from logger import Logger
+from logger import LogLevel
 from model_manager import ModelManager, APIRecord
 
 load_dotenv()
@@ -15,6 +14,7 @@ thought_signatures: dict[str, str] = {}
 THOUGHT_SIGNATURE_SENTINEL = "skip_thought_signature_validator"
 
 model_manager = ModelManager()
+logger = Logger()
 
 def inject_signatures(body: dict) -> None:
     for message in body.get("messages", []):
@@ -23,7 +23,7 @@ def inject_signatures(body: dict) -> None:
         for tool_call in message.get("tool_calls", []) or []:
             signature = thought_signatures.get(tool_call.get("id"), THOUGHT_SIGNATURE_SENTINEL)
             if signature == THOUGHT_SIGNATURE_SENTINEL:
-                print("WARNING: Falling back to sentinel")
+                logger.log(LogLevel.Warning, "Falling back to sentinel for a function signature")
             tool_call.setdefault("extra_content", {}).setdefault("google", {})["thought_signature"] = signature
 
 def capture_signatures(parsed_chunk: dict, index_to_id: dict):
@@ -64,9 +64,9 @@ async def chat_completions(request: Request):
             record.record.RPD_error = True
 
         if not known_error_noted:
-            print(f"GEMINI ERROR {status_code}: {error}")
+            logger.log(LogLevel.ERROR, f"GEMINI ERROR Code {status_code}: {error}")
 
-    async def stream_request(record: APIRecord):
+    async def stream_request():
 
         while True:
             record = model_manager.reserve_best_model()
@@ -110,4 +110,4 @@ async def chat_completions(request: Request):
                         model_manager.finalize(record, total_tokens)
                     return
 
-    return StreamingResponse(stream_request(api_record), media_type="text/event-stream")
+    return StreamingResponse(stream_request(), media_type="text/event-stream")
