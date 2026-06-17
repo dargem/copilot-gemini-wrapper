@@ -18,6 +18,8 @@ def inject_signatures(body: dict) -> None:
             continue
         for tool_call in message.get("tool_calls", []) or []:
             signature = thought_signatures.get(tool_call.get("id"), THOUGHT_SIGNATURE_SENTINEL)
+            if signature == THOUGHT_SIGNATURE_SENTINEL:
+                print("WARNING: Falling back to sentinel")
             tool_call.setdefault("extra_content", {}).setdefault("google", {})["thought_signature"] = signature
 
 def capture_signatures(parsed_chunk: dict, index_to_id: dict):
