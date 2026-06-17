@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from collections import deque
+from enum import Enum
 
 load_dotenv()
 GEMINI_API_KEY = os.getenv("KEY_0")
@@ -20,6 +21,12 @@ model_limits = {
     "gemini-3-flash": Limits(5, 250000, 20),
     "gemini-3.1-flash-lite": Limits(15, 250000, 500)
 }
+
+class Errors(Enum):
+    RPM_QUOTA_HIT = 0,
+    TPM_QUOTA_HIT = 1,
+    RPD_QUOTA_HIT = 2,
+
 
 class Record:
     def __init__(self, tokens_used, date):
@@ -94,13 +101,14 @@ class APIRecord:
         self.model = model
         self.record = record
 
-class KeyManager:
+class ModelManager:
     def __init__(self):
         self.key_infos = {key : KeyInfo() for id, key in os.environ.items() if "KEY_" in id}
 
     def reserve_model(self, model) -> APIRecord:
         for key, info in self.key_infos.items():
-            if not info.has_model_available():
+
+            if not info.has_model_available(model):
                 continue
 
             return APIRecord(key, model, info.reserve_model(model))
@@ -112,19 +120,16 @@ class KeyManager:
         for model in model_limits.keys():
             # The preferred models are inserted first
             try:
-                APIRecord = self.reserve_model(model)
-                return APIRecord
+                return self.reserve_model(model)
             except Exception:
                 # Give up if no keys are currently available for this model
                 # And try it with just a worse model
                 pass
 
-        # No models were available
         raise Exception("All keys are exhausted, no models available")
     
     def finalize(self, API_record: APIRecord, tokens_used):
         self.key_infos[API_record.key].finalize(API_record.model, API_record.record, tokens_used)
-
 
             
 

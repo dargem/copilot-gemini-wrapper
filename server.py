@@ -6,7 +6,7 @@ import httpx
 import os
 from dotenv import load_dotenv
 
-from key_manager import KeyManager, APIRecord
+from model_manager import ModelManager, APIRecord
 
 load_dotenv()
 
@@ -14,7 +14,7 @@ app = FastAPI()
 thought_signatures: dict[str, str] = {}
 THOUGHT_SIGNATURE_SENTINEL = "skip_thought_signature_validator"
 
-key_manager = KeyManager()
+model_manager = ModelManager()
 
 def inject_signatures(body: dict) -> None:
     for message in body.get("messages", []):
@@ -50,35 +50,41 @@ async def chat_completions(request: Request):
     # Gemini endpoint that is compatible with the OpenAI schema
     GEMINI_OPENAI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/v1/chat/completions"
 
-    # Add proper selection later
-    api_record: APIRecord = key_manager.reserve_best_model()
+    # After reserving we need to return the APIRecord with used tokens
+    api_record: APIRecord = model_manager.reserve_best_model()
 
     body["model"] = api_record.model
     headers = {
         "Authorization": f"Bearer {api_record.key}",
         "Content-Type": "application/json"
     }
+    body["stream_options"] = {"include_usage": True}
 
-    async def stream_request():
+    async def stream_request(record):
         index_to_id: dict[int, str] = {}
-        async with httpx.AsyncClient() as client:
-            async with client.stream(
-                "POST",
-                GEMINI_OPENAI_URL,
-                json=body,
-                headers=headers,
-                timeout=60.0
-            ) as response:
-                if response.status_code != 200:
-                    error_body = await response.aread()
-                    print(f"GEMINI ERROR {response.status_code}: {error_body.decode()}")
-                    return
-                async for line in response.aiter_lines():
-                    if line.startswith("data: ") and line != "data: [DONE]":
-                        try:
-                            capture_signatures(json.loads(line[6:]), index_to_id)
-                        except json.JSONDecodeError:
-                            pass
-                    yield (line + "\n").encode()
+        total_tokens = 0
+        try:
+            async with httpx.AsyncClient() as client:
+                async with client.stream(
+                    "POST",
+                    GEMINI_OPENAI_URL,
+                    json=body,
+                    headers=headers,
+                    timeout=60.0
+                ) as response:
+                    if response.status_code != 200:
+                        error_body = await response.aread()
+                        print(f"GEMINI ERROR {response.status_code}: {error_body.decode()}")
+                        return
+                    async for line in response.aiter_lines():
+                        if line.startswith("data: ") and line != "data: [DONE]":
+                            try:
+                                capture_signatures(json.loads(line[6:]), index_to_id)
+                            except json.JSONDecodeError:
+                                pass
+                        yield (line + "\n").encode()
+        finally:
+            # add some error checking later
+            model_manager.finalize(record, total_tokens)
 
-    return StreamingResponse(stream_request(), media_type="text/event-stream")
+    return StreamingResponse(stream_request(api_record), media_type="text/event-stream")
