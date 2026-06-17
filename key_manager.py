@@ -22,15 +22,14 @@ model_limits = {
 }
 
 class ModelUsage:
-    RPD_Made = 0
-    rolling_TPM = 0
-
-    # API limits reset at midnight
-    last_request_date = datetime.now(ZoneInfo("America/Los_Angeles")).date()
-    past_uses = deque()
 
     def __init__(self, limits: Limits):
         self.limits = limits
+        self.rolling_TPM = 0
+        self.RPD_Made = 0
+        # API limits reset at midnight
+        self.last_request_date = datetime.now(ZoneInfo("America/Los_Angeles")).date()
+        self.past_uses = deque()
 
     def check_availability(self):
         today = datetime.now(ZoneInfo("America/Los_Angeles")).date()
@@ -49,21 +48,26 @@ class ModelUsage:
         return True
 
     def record_use(self, tokens_used):
-        time = datetime.now(ZoneInfo("America/Los_Angeles"))
+        current_time = datetime.now(ZoneInfo("America/Los_Angeles"))
 
         class Record:
             def __init__(self, tokens_used, date):
                 self.tokens = tokens_used
                 self.date = date
 
-        self.past_uses.append(Record(tokens_used, time))
+        self.last_request_date = current_time.date()
+        self.past_uses.append(Record(tokens_used, current_time))
         self.rolling_TPM += tokens_used
+        self.RPD_Made += 1
 
-        while (True):
+        while (len(self.past_uses) > 0):
             # Add some leeway on the 1 minute reset
-            if time - self.past_uses[0].date > timedelta(minutes=1, seconds=5):
-                record = self.past_uses.pop()
+            if current_time - self.past_uses[0].date > timedelta(minutes=1, seconds=5):
+                record = self.past_uses.popleft()
                 self.rolling_TPM -= record.tokens
+            else:
+                # Early break its a queue data structure
+                break
 
 
 class KeyInfo:
@@ -72,5 +76,5 @@ class KeyInfo:
 
 class KeyManager:
     def __init__(self):
-        self.keys = [key for id, key in os.environ if "KEY_" in id]
+        self.keys = [key for id, key in os.environ.items() if "KEY_" in id]
 
