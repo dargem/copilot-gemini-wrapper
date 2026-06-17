@@ -22,16 +22,14 @@ model_limits = {
     "gemini-3.1-flash-lite": Limits(15, 250000, 500)
 }
 
-class Errors(Enum):
-    RPM_QUOTA_HIT = 0,
-    TPM_QUOTA_HIT = 1,
-    RPD_QUOTA_HIT = 2,
-
-
 class Record:
     def __init__(self, tokens_used, date):
         self.tokens = tokens_used
         self.date = date
+        self.RPM_error = False
+        self.TPM_error = False
+        self.RPD_error = False
+
         
 class ModelUsage:
 
@@ -76,11 +74,21 @@ class ModelUsage:
         self.RPD_Made += 1
         return record
 
-    def finalize(self, record, tokens_used):
+    def finalize(self, record: Record, tokens_used):
         """Call once you know the real token count, after the response completes."""
         if self.past_uses:
             record.tokens = tokens_used
             self.rolling_TPM += tokens_used
+
+        # We may have gotten an error also, our tracking isn't persistent between server saves
+        # and stuff can be finicky so if API returns an error we update to match it
+        if record.RPD_error:
+            self.RPD_Made = self.limits.RPD
+        if record.RPM_error:
+            for _ in range(self.limits.RPM):
+                self.past_uses.append(Record(0, datetime.now(ZoneInfo("America/Los_Angeles"))))
+        if record.TPM_error:
+            self.past_uses.append(Record(self.limits.TPM, datetime.now(ZoneInfo("America/Los_Angeles"))))
 
 class KeyInfo:
     def __init__(self):
@@ -96,7 +104,7 @@ class KeyInfo:
         self.model_usages[model].finalize(record, tokens_used)
 
 class APIRecord:
-    def __init__(self, api_key, model, record):
+    def __init__(self, api_key, model, record: Record):
         self.key = api_key
         self.model = model
         self.record = record
@@ -116,6 +124,7 @@ class ModelManager:
         # In this case no models are available of this type so throw
         raise Exception("No keys have this model currently available")
     
+    """ Can return None if all models are exhausted """
     def reserve_best_model(self) -> APIRecord:
         for model in model_limits.keys():
             # The preferred models are inserted first
@@ -125,8 +134,8 @@ class ModelManager:
                 # Give up if no keys are currently available for this model
                 # And try it with just a worse model
                 pass
-
-        raise Exception("All keys are exhausted, no models available")
+    
+        return None
     
     def finalize(self, API_record: APIRecord, tokens_used):
         self.key_infos[API_record.key].finalize(API_record.model, API_record.record, tokens_used)

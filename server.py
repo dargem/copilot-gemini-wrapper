@@ -50,20 +50,40 @@ async def chat_completions(request: Request):
     # Gemini endpoint that is compatible with the OpenAI schema
     GEMINI_OPENAI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/v1/chat/completions"
 
-    # After reserving we need to return the APIRecord with used tokens
-    api_record: APIRecord = model_manager.reserve_best_model()
+    def record_errors(record: APIRecord, error: str, status_code):
+        known_error_noted = False
 
-    body["model"] = api_record.model
-    headers = {
-        "Authorization": f"Bearer {api_record.key}",
-        "Content-Type": "application/json"
-    }
-    body["stream_options"] = {"include_usage": True}
+        if "GenerateRequestsPerDay" in error:
+            known_error_noted = True
+            record.record.RPD_error = True
+        if "GenerateRequestsPerMinute" in error:
+            known_error_noted = True
+            record.record.RPM_error = True
+        if ("GenerateContentInputTokens") in error:
+            known_error_noted = True
+            record.record.RPD_error = True
 
-    async def stream_request(record):
-        index_to_id: dict[int, str] = {}
-        total_tokens = 0
-        try:
+        if not known_error_noted:
+            print(f"GEMINI ERROR {status_code}: {error}")
+
+    async def stream_request(record: APIRecord):
+
+        while True:
+            record = model_manager.reserve_best_model()
+
+            if record == None:
+                yield b'data: {"error": {"message": "All keys exhausted"}}\n\n'
+                return
+
+            body["model"] = record.model
+            headers = {
+                "Authorization": f"Bearer {record.key}",
+                "Content-Type": "application/json"
+            }
+
+            index_to_id: dict[int, str] = {}
+            total_tokens = 0
+
             async with httpx.AsyncClient() as client:
                 async with client.stream(
                     "POST",
@@ -74,17 +94,20 @@ async def chat_completions(request: Request):
                 ) as response:
                     if response.status_code != 200:
                         error_body = await response.aread()
-                        print(f"GEMINI ERROR {response.status_code}: {error_body.decode()}")
-                        return
-                    async for line in response.aiter_lines():
-                        if line.startswith("data: ") and line != "data: [DONE]":
-                            try:
-                                capture_signatures(json.loads(line[6:]), index_to_id)
-                            except json.JSONDecodeError:
-                                pass
-                        yield (line + "\n").encode()
-        finally:
-            # add some error checking later
-            model_manager.finalize(record, total_tokens)
+                        record_errors(record, error_body.decode(), response.status_code)
+                        model_manager.finalize(record, total_tokens)
+                        continue
+
+                    try:
+                        async for line in response.aiter_lines():
+                            if line.startswith("data: ") and line != "data: [DONE]":
+                                try:
+                                    capture_signatures(json.loads(line[6:]), index_to_id)
+                                except json.JSONDecodeError:
+                                    pass
+                            yield (line + "\n").encode()
+                    finally:
+                        model_manager.finalize(record, total_tokens)
+                    return
 
     return StreamingResponse(stream_request(api_record), media_type="text/event-stream")
