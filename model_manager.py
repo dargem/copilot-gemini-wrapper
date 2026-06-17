@@ -1,12 +1,13 @@
 import os
-from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from collections import deque
-from enum import Enum
+import json
 from logger import LogLevel, Logger
 
 logger = Logger() # Probably not great practice but its guarded with a mutex
+
+DATA_FILE = "key_data.json"
 
 class Limits:
     def __init__(self, RPM, TPM, RPD):
@@ -127,23 +128,33 @@ class ModelManager:
     """ Can return None if all models are exhausted """
     def reserve_best_model(self) -> APIRecord:
         for model in model_limits.keys():
-            logger.log(LogLevel.INFO, "Trying keys for {model} model")
+            logger.log(LogLevel.INFO, f"Trying keys for {model} model")
             # The preferred models are inserted first
             try:
                 return self.reserve_model(model)
             except Exception:
                 # Give up if no keys are currently available for this model
                 # And try it with just a worse model
-                logger.log(LogLevel.INFO, "Exhausted all keys for {model} model")
+                logger.log(LogLevel.INFO, f"Exhausted all keys for {model} model")
                 pass
     
         return None
     
     def finalize(self, API_record: APIRecord, tokens_used):
         self.key_infos[API_record.key].finalize(API_record.model, API_record.record, tokens_used)
-
-            
-
-
     
+    def save(self):
+        data = {}
+        for key, key_info in self.key_infos.items():
+            uses = {}
+            for model, usage in key_info.model_usages.items():
+                uses[model] = {
+                    "RPD": usage.RPD_Made,
+                    "last_request_date": usage.last_request_date.isoformat()
+                }
+            data[key] = uses
+
+        with open(DATA_FILE, "w", encoding="utf-8") as file:
+            json.dump(data, file, indent=4)
+        
 

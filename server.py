@@ -5,6 +5,7 @@ import httpx
 from dotenv import load_dotenv
 from logger import Logger, LogLevel
 from model_manager import ModelManager, APIRecord
+from contextlib import asynccontextmanager
 
 load_dotenv()
 
@@ -15,6 +16,27 @@ THOUGHT_SIGNATURE_SENTINEL = "skip_thought_signature_validator"
 model_manager = ModelManager()
 logger = Logger()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    logger.log(LogLevel.INFO, "Shutting down and saving models")
+    model_manager.save()
+
+app = FastAPI(lifespan=lifespan)
+# def shutdown_hook():
+#     logger.log(LogLevel.INFO, "Shutting down and saving models")
+#     model_manager.save()
+
+# atexit.register(shutdown_hook)
+
+# def signal_handler(signum, frame):
+#     logger.log(LogLevel.INFO, f"Interrupted by system signal: {signum} delegating shutdown to hook")
+
+# signal.signal(signal.SIGINT, signal_handler)
+# signal.signal(signal.SIGTERM, signal_handler)
+
+
 def inject_signatures(body: dict) -> None:
     for message in body.get("messages", []):
         if message.get("role") != "assistant":
@@ -22,7 +44,7 @@ def inject_signatures(body: dict) -> None:
         for tool_call in message.get("tool_calls", []) or []:
             signature = thought_signatures.get(tool_call.get("id"), THOUGHT_SIGNATURE_SENTINEL)
             if signature == THOUGHT_SIGNATURE_SENTINEL:
-                logger.log(LogLevel.Warning, "Falling back to sentinel for a function signature")
+                logger.log(LogLevel.WARNING, "Falling back to sentinel for a function signature")
             tool_call.setdefault("extra_content", {}).setdefault("google", {})["thought_signature"] = signature
 
 def capture_signatures(parsed_chunk: dict, index_to_id: dict):
