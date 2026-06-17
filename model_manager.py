@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from collections import deque
 import json
 from logger import LogLevel, Logger
+from pathlib import Path
 
 logger = Logger() # Probably not great practice but its guarded with a mutex
 
@@ -113,6 +114,7 @@ class APIRecord:
 class ModelManager:
     def __init__(self):
         self.key_infos = {key : KeyInfo() for id, key in os.environ.items() if "KEY_" in id}
+        self.load()
 
     def reserve_model(self, model) -> APIRecord:
         for key, info in self.key_infos.items():
@@ -159,6 +161,10 @@ class ModelManager:
 
     """ Call this after loading from env and it will overwrite some data with prior saved """
     def load(self):
+
+        if not Path(DATA_FILE).is_file():
+            return
+        
         with open(DATA_FILE, "r") as file:
             data = json.load(file)
 
@@ -169,7 +175,7 @@ class ModelManager:
             for model, saved_info in key_infos.items():
                 if model not in relevant_key_infos.model_usages.keys(): continue
 
-                relevant_key_infos.model_usages[request_date].RPD_Made = int(saved_info["RPD"])
+                relevant_key_infos.model_usages[model].RPD_Made = int(saved_info["RPD"])
 
                 request_date = datetime.fromisoformat(saved_info["last_request_date"]).date()
                 relevant_key_infos.model_usages[model].last_request_date = request_date
