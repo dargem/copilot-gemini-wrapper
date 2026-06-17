@@ -3,8 +3,7 @@ from fastapi.responses import StreamingResponse
 import json
 import httpx
 from dotenv import load_dotenv
-from logger import Logger
-from logger import LogLevel
+from logger import Logger, LogLevel
 from model_manager import ModelManager, APIRecord
 
 load_dotenv()
@@ -44,6 +43,7 @@ def capture_signatures(parsed_chunk: dict, index_to_id: dict):
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
+    logger.log(LogLevel.INFO, "Starting chat completion request")
     body = await request.json()
     inject_signatures(body)
 
@@ -64,12 +64,12 @@ async def chat_completions(request: Request):
             record.record.RPD_error = True
 
         if not known_error_noted:
-            logger.log(LogLevel.ERROR, f"GEMINI ERROR Code {status_code}: {error}")
+            logger.log(LogLevel.ERROR, f"Streaming interrupted, Gemini Error Code {status_code}: {error}")
 
     async def stream_request():
-
         while True:
             record = model_manager.reserve_best_model()
+            logger.log(LogLevel.INFO, f"Streaming response with {record.model}")
 
             if record == None:
                 yield b'data: {"error": {"message": "All keys exhausted"}}\n\n'

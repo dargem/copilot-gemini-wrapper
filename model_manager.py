@@ -4,9 +4,9 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from collections import deque
 from enum import Enum
+from logger import LogLevel, Logger
 
-load_dotenv()
-GEMINI_API_KEY = os.getenv("KEY_0")
+logger = Logger() # Probably not great practice but its guarded with a mutex
 
 class Limits:
     def __init__(self, RPM, TPM, RPD):
@@ -127,12 +127,14 @@ class ModelManager:
     """ Can return None if all models are exhausted """
     def reserve_best_model(self) -> APIRecord:
         for model in model_limits.keys():
+            logger.log(LogLevel.INFO, "Trying keys for {model} model")
             # The preferred models are inserted first
             try:
                 return self.reserve_model(model)
             except Exception:
                 # Give up if no keys are currently available for this model
                 # And try it with just a worse model
+                logger.log(LogLevel.INFO, "Exhausted all keys for {model} model")
                 pass
     
         return None

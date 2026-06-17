@@ -1,6 +1,8 @@
 from enum import Enum
 from pathlib import Path
 
+import threading
+file_lock = threading.Lock()
 
 class LogLevel(Enum):
     DEBUG = "DEBUG"
@@ -21,5 +23,6 @@ class Logger:
     def log(self, level: LogLevel, info: str):
         # Prints both to screen and also saves to file
         print(f"{level.value}: {info}")
-        with open(self.LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"{level.value}: {info}\n")
+        with file_lock:
+            with open(self.LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(f"{level.value}: {info}\n")
