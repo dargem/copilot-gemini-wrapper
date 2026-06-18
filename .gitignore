@@ -1,3 +1,4 @@
 .env
 log.txt
 key_data.json
+__pycache__
