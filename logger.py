@@ -26,3 +26,5 @@ class Logger:
         with file_lock:
             with open(self.LOG_FILE, "a", encoding="utf-8") as f:
                 f.write(f"{level.value}: {info}\n")
+
+                

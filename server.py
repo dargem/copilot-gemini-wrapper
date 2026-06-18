@@ -83,7 +83,7 @@ async def chat_completions(request: Request):
             record.record.RPM_error = True
         if ("GenerateContentInputTokens") in error:
             known_error_noted = True
-            record.record.RPD_error = True
+            record.record.TPM_error = True
 
         if not known_error_noted:
             logger.log(LogLevel.ERROR, f"Streaming interrupted, Gemini Error Code {status_code}: {error}")
@@ -112,7 +112,7 @@ async def chat_completions(request: Request):
                     GEMINI_OPENAI_URL,
                     json=body,
                     headers=headers,
-                    timeout=60.0
+                    timeout=180.0
                 ) as response:
                     if response.status_code != 200:
                         error_body = await response.aread()
