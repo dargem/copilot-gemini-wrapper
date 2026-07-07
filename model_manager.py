@@ -31,6 +31,7 @@ class Record:
         self.RPM_error = False
         self.TPM_error = False
         self.RPD_error = False
+        self.DEMAND_error = False # High demand for the model
 
         
 class ModelUsage:
@@ -92,6 +93,7 @@ class ModelUsage:
         if record.TPM_error:
             self.past_uses.append(Record(self.limits.TPM, datetime.now(ZoneInfo("America/Los_Angeles"))))
 
+# Info for a specific key, has multiple models
 class KeyInfo:
     def __init__(self):
         self.model_usages = {model: ModelUsage(limit) for model, limit in model_limits.items()}
@@ -112,9 +114,14 @@ class APIRecord:
         self.record = record
 
 class ModelManager:
+    # If time since now - last high demand timeout < back_off delta we don't use the model
+    BACKOFF_DELTA = timedelta(minutes=1)
+
     def __init__(self):
         self.key_infos = {key : KeyInfo() for id, key in os.environ.items() if "KEY_" in id}
         self.load()
+        # We init with a sentinel value
+        self.last_model_overload = {model : datetime.fromisoformat("2000-01-01") for model in model_limits.keys()}
 
     def reserve_model(self, model) -> APIRecord:
         for key, info in self.key_infos.items():
@@ -131,6 +138,11 @@ class ModelManager:
     def reserve_best_model(self) -> APIRecord:
         for model in model_limits.keys():
             logger.log(LogLevel.INFO, f"Trying keys for {model} model")
+
+            if datetime.now() - self.last_model_overload[model] < self.BACKOFF_DELTA:
+                logger.log(LogLevel.INFO, f"Backing off from {model} due to high demand")
+                continue
+
             # The preferred models are inserted first
             try:
                 return self.reserve_model(model)
@@ -138,11 +150,14 @@ class ModelManager:
                 # Give up if no keys are currently available for this model
                 # And try it with just a worse model
                 logger.log(LogLevel.INFO, f"Exhausted all keys for {model} model")
-                pass
     
         return None
     
     def finalize(self, API_record: APIRecord, tokens_used):
+        if API_record.record.DEMAND_error:
+            # If there's a demand error we should note this down here first
+            self.last_model_overload[API_record.model] = datetime.now()
+
         self.key_infos[API_record.key].finalize(API_record.model, API_record.record, tokens_used)
     
     def save(self):

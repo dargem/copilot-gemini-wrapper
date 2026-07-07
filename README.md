@@ -61,23 +61,53 @@ uvicorn server:app --reload --port 8787
 
 ## VS Code Integration
 
-To configure VS Code's GitHub Copilot to use this wrapper, add a custom endpoint in your model settings. You can adjust `maxInputTokens` and `maxOutputTokens` as needed. Gemini rate limits don't really care about length of output.
+To configure VS Code's GitHub Copilot to use this wrapper, add a custom endpoint in your model settings. You can adjust `maxInputTokens` and `maxOutputTokens` as needed. Gemini rate limits don't really care about length of output. id corresponds to what is being sent to the server about what model you have selected. Name is just the client side name.
 
 ```json
-{
-    "name": "GeminiWrapper",
-    "vendor": "customendpoint",
-    "apiType": "chat-completions",
-    "models": [
-        {
-            "id": "gemini",
-            "name": "Gemini (best pooled)",
-            "url": "http://localhost:8787/v1/chat/completions",
-            "toolCalling": true,
-            "vision": true,
-            "maxInputTokens": 512000,
-            "maxOutputTokens": 16000
-        }
-    ]
-}
+[
+    // ETC ... then add this
+	{
+		"name": "GeminiWrapper",
+		"vendor": "customendpoint",
+		"apiType": "chat-completions",
+		"models": [
+			{
+				"id": "gemini_pooled",
+				"name": "best pooled",
+				"url": "http://localhost:8787/v1/chat/completions",
+				"toolCalling": true,
+				"vision": true,
+				"maxInputTokens": 512000,
+				"maxOutputTokens": 16000
+			},
+			{
+				"id": "gemini-3.5-flash",
+				"name": "3.5 flash",
+				"url": "http://localhost:8787/v1/chat/completions",
+				"toolCalling": true,
+				"vision": true,
+				"maxInputTokens": 512000,
+				"maxOutputTokens": 16000
+			},
+			{
+				"id": "gemini-3-flash-preview",
+				"name": "3 flash",
+				"url": "http://localhost:8787/v1/chat/completions",
+				"toolCalling": true,
+				"vision": true,
+				"maxInputTokens": 512000,
+				"maxOutputTokens": 16000
+			},
+			{
+				"id": "gemini-3.1-flash-lite",
+				"name": "3.1 flash lite",
+				"url": "http://localhost:8787/v1/chat/completions",
+				"toolCalling": true,
+				"vision": true,
+				"maxInputTokens": 512000,
+				"maxOutputTokens": 16000
+			},
+		]
+	}
+]
 ```

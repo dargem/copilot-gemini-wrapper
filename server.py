@@ -4,13 +4,28 @@ import json
 import httpx
 from dotenv import load_dotenv
 from logger import Logger, LogLevel
-from model_manager import ModelManager, APIRecord
+from model_manager import ModelManager, APIRecord, model_limits
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 load_dotenv()
 
 app = FastAPI()
-thought_signatures: dict[str, str] = {}
+
+SIGNATURES_FILE = "thought_signatures.json"
+
+def save_signatures():
+    with open(SIGNATURES_FILE, "w") as f:
+        json.dump(thought_signatures, f)
+
+def load_signatures() -> dict[str, str]:
+    if not Path(SIGNATURES_FILE).is_file():
+        return {}
+    with open(SIGNATURES_FILE, "r") as f:
+        return json.load(f)
+
+thought_signatures = load_signatures()
+
 THOUGHT_SIGNATURE_SENTINEL = "skip_thought_signature_validator"
 
 model_manager = ModelManager()
@@ -22,6 +37,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.log(LogLevel.INFO, "Shutting down and saving models")
     model_manager.save()
+    save_signatures()
 
 app = FastAPI(lifespan=lifespan)
 # def shutdown_hook():
@@ -81,23 +97,41 @@ async def chat_completions(request: Request):
         if "GenerateRequestsPerMinute" in error:
             known_error_noted = True
             record.record.RPM_error = True
-        if ("GenerateContentInputTokens") in error:
+        if "GenerateContentInputTokens" in error:
             known_error_noted = True
             record.record.TPM_error = True
+        if "This model is currently experiencing high demand" in error:
+            known_error_noted = True
+            record.record.DEMAND_error = True
 
         if not known_error_noted:
-            logger.log(LogLevel.ERROR, f"Streaming interrupted, Gemini Error Code {status_code}: {error}")
+            logger.log(LogLevel.ERROR, f"Unknown error interrupted streaming, Gemini Error Code {status_code}: {error}")
+        else:
+            logger.log(LogLevel.INFO, f"Known error interrupted streaming, Gemini Error Code {status_code}: {error}")
 
     async def stream_request():
         while True:
-            record = model_manager.reserve_best_model()
-            logger.log(LogLevel.INFO, f"Streaming response with {record.model}")
+            
+            selected_model = body.get("model", "gemini_pooled") # this is id in your json file
+            if selected_model not in model_limits.keys():
+                if selected_model != "gemini_pooled":
+                    logger.log(LogLevel.INFO, f"User has run query with unknown model {selected_model}, defaulting to best pooled")
+                record = model_manager.reserve_best_model()
+            else:
+                try:
+                    record = model_manager.reserve_model(selected_model)
+                except Exception:
+                    logger.log(LogLevel.INFO, f"Model {selected_model} not available, falling back to best pooled")
+                    record = model_manager.reserve_best_model()
 
             if record == None:
+                logger.log(LogLevel.INFO, "Exhausted all keys")
                 yield b'data: {"error": {"message": "All keys exhausted"}}\n\n'
                 return
 
+            logger.log(LogLevel.INFO, f"Streaming response with {record.model}")
             body["model"] = record.model
+
             headers = {
                 "Authorization": f"Bearer {record.key}",
                 "Content-Type": "application/json"
@@ -112,15 +146,15 @@ async def chat_completions(request: Request):
                     GEMINI_OPENAI_URL,
                     json=body,
                     headers=headers,
-                    timeout=180.0
+                    timeout=200.0
                 ) as response:
                     if response.status_code != 200:
                         error_body = await response.aread()
                         record_errors(record, error_body.decode(), response.status_code)
                         model_manager.finalize(record, total_tokens)
                         continue
-
                     try:
+                        logger.log(LogLevel.INFO, "Successful response from Gemini")
                         async for line in response.aiter_lines():
                             if line.startswith("data: ") and line != "data: [DONE]":
                                 try:
