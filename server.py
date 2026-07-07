@@ -146,7 +146,7 @@ async def chat_completions(request: Request):
                     GEMINI_OPENAI_URL,
                     json=body,
                     headers=headers,
-                    timeout=200.0
+                    timeout=90.0
                 ) as response:
                     if response.status_code != 200:
                         error_body = await response.aread()
