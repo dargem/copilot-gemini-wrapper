@@ -34,15 +34,7 @@ model_limits = {
 
 ## Setup
 
-### 1. Install Dependencies
-
-Install the required Python packages:
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Configure API Keys
+### 1. Configure API Keys
 
 Create a `.env` file in the root directory and add your Gemini API keys. Each key must start with `KEY_` followed by a unique identifier (e.g., the name of the Google AI Studio project):
 
@@ -52,13 +44,31 @@ KEY_BAR=sdafjadasfklafsd
 KEY_PROJECT_7=dsafajdkfaklfajd
 ```
 
-### 3. Start the Server
+### 2. Install Dependencies
 
-Run the FastAPI server locally using Uvicorn:
+There are two options, I suggest using the bash script run.sh. It should work for unix based systems. It will detect if you have created a venv. If you haven't it will ask to create one and install requirements.txt. Once its done it will start up a server. You can easily create a symlink in /.local/bin to this `run.sh` and you can launch it from anywhere.
+
+To do this manually (or if on windows source venv/bin/activate won't work so you need to modify it), create a venv and install the required Python packages:
 
 ```bash
-uvicorn server:app --reload --port 8787
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
+
+Then start the server using Uvicorn:
+
+```bash
+uvicorn server:app --port 8787
+```
+
+Use the --reload flag if doing development. If that port is already in use you may want to use this to see who is using the port:
+
+```bash
+sudo ss -tulpn | grep 8787
+```
+
+You can kill them using the PID, or just change the used port of this server.
 
 ## VS Code Integration
 

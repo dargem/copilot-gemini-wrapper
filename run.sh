@@ -1,3 +1,9 @@
+# You can symlink this script and it will navigate into the proper directory
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+
+cd "$SCRIPT_DIR" || exit 1
+
 if [ ! -d "venv" ]; then
     echo "Venv not set up, respond [y] to setup and install requirements"
     read response
@@ -12,5 +18,5 @@ fi
 
 source venv/bin/activate
 echo "Starting up"
-uvicorn server:app --reload --port 8787
+uvicorn server:app --port 8787 # For development go --reload
 
