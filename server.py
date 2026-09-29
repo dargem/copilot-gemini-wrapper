@@ -63,6 +63,15 @@ def inject_signatures(body: dict) -> None:
                 logger.log(LogLevel.WARNING, "Falling back to sentinel for a function signature")
             tool_call.setdefault("extra_content", {}).setdefault("google", {})["thought_signature"] = signature
 
+
+def enable_thought_summaries(body: dict) -> None:
+    extra_body = body.setdefault("extra_body", {})
+    google = extra_body.setdefault("google", {})
+    thinking_config = google.setdefault("thinking_config", {})
+
+    if "include_thoughts" not in thinking_config:
+        thinking_config["include_thoughts"] = True
+
 def capture_signatures(parsed_chunk: dict, index_to_id: dict):
     choices = parsed_chunk.get("choices", [])
 
@@ -84,6 +93,7 @@ async def chat_completions(request: Request):
     logger.log(LogLevel.INFO, "Starting chat completion request")
     body = await request.json()
     inject_signatures(body)
+    enable_thought_summaries(body)
 
     # Gemini endpoint that is compatible with the OpenAI schema
     GEMINI_OPENAI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/v1/chat/completions"
@@ -146,7 +156,7 @@ async def chat_completions(request: Request):
                     GEMINI_OPENAI_URL,
                     json=body,
                     headers=headers,
-                    timeout=90.0
+                    timeout=300.0
                 ) as response:
                     if response.status_code != 200:
                         error_body = await response.aread()

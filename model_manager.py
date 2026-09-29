@@ -19,9 +19,13 @@ class Limits:
 # Update when changed, put preferred models higher
 # https://aistudio.google.com/rate-limit?timeRange=last-28-days
 model_limits = {
+    "gemini-3.8-flash": Limits(5, 250000, 20),
+    "gemini-3.7-flash": Limits(5, 250000, 20),
+    "gemini-3.6-flash": Limits(5, 250000, 20),
     "gemini-3.5-flash": Limits(5, 250000, 20),
     "gemini-3-flash-preview": Limits(5, 250000, 20),
-    "gemini-3.1-flash-lite": Limits(15, 250000, 500)
+    "gemini-3.5-flash-lite": Limits(15, 250000, 500),
+    "gemini-3.1-flash-lite": Limits(15, 250000, 500),
 }
 
 class Record:

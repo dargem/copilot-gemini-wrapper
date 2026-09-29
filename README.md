@@ -1,6 +1,6 @@
 # Copilot Gemini Wrapper
 
-A key-rotating wrapper around Gemini's API for GitHub Copilot. It is designed to manage multiple Gemini API keys, rotate them to handle rate limits, and provide a seamless custom endpoint for VS Code's GitHub Copilot. Using Gemini AI Studio you can have 12 google workspaces, each with their own API key that have independent rate limits. This allows you as of today's rate limits (18th June) to get 240 gemini-3.5-flash, 240 gemini-3-flash-preview and 6000 gemini-3.1-flash-lite calls respectively. This program will create the files log.txt, key_data.json which stores usage limits corresponding to your keys and thought_signatures.json which stores gemini's encrypted thought signatures used for internal reasoning. This has instructions for setting up the server, as well as a way to simply add it as a custom endpoint for github copilot using vscode.
+A key-rotating wrapper around Gemini's API for GitHub Copilot. It is designed to manage multiple Gemini API keys, rotate them to handle rate limits, and provide a seamless custom endpoint for VS Code's GitHub Copilot. Using Gemini AI Studio you can have 12 google workspaces, each with their own API key that have independent rate limits. This program will create the files log.txt, key_data.json which stores usage limits corresponding to your keys and thought_signatures.json which stores gemini's encrypted thought signatures used for internal reasoning. This has instructions for setting up the server, as well as a way to simply add it as a custom endpoint for github copilot using vscode.
 
 ## Features
 
@@ -11,7 +11,7 @@ A key-rotating wrapper around Gemini's API for GitHub Copilot. It is designed to
 - **Automatic Reset**: Daily request counts are reset automatically at midnight (Pacific Time).
 - **Out-of-Sync Recovery**: Built-in fallbacks exist if a key hits rate limits, updating local tracking accordingly.
 - **Simple Logging**: Logs requests and errors to both the console and log.txt.
-- **Thought Signatures**: Transparent Gemini thought signature relay which copilot drops for multi-turn tool call continuity
+- **Thought Summaries and Signatures**: Transparently enables Gemini thought summaries for the reasoning panel and relays thought signatures for multi-turn tool call continuity
 - **Full Compatibility**: There are no limitations compared to a normal endpoint, tool use and etc all works correctly.
 
 ## Supported Models
@@ -26,10 +26,15 @@ Just adding another model into this will include it in the rotation. The model_m
 
 ```python
 model_limits = {
-    "gemini-3.5-flash": Limits(5, 250000, 20), # RPM, TPM, #RPD
+    "gemini-3.8-flash": Limits(5, 250000, 20), # RPM TPM RPD
+    "gemini-3.7-flash": Limits(5, 250000, 20),
+    "gemini-3.6-flash": Limits(5, 250000, 20),
+    "gemini-3.5-flash": Limits(5, 250000, 20),
     "gemini-3-flash-preview": Limits(5, 250000, 20),
-    "gemini-3.1-flash-lite": Limits(15, 250000, 500)
+    "gemini-3.5-flash-lite": Limits(15, 250000, 500),
+    "gemini-3.1-flash-lite": Limits(15, 250000, 500),
 }
+
 ```
 
 ## Setup
@@ -80,7 +85,7 @@ To configure VS Code's GitHub Copilot to use this wrapper, add a custom endpoint
 
 ```json
 [
-    // ETC... if you already have some, then add this as an entry
+	// ETC... if you already have some, then add this as an entry
 	{
 		"name": "GeminiWrapper", // This is the group each model is under
 		"vendor": "customendpoint",
@@ -92,8 +97,35 @@ To configure VS Code's GitHub Copilot to use this wrapper, add a custom endpoint
 				"url": "http://localhost:8787/v1/chat/completions",
 				"toolCalling": true,
 				"vision": true,
-				"maxInputTokens": 512000,
-				"maxOutputTokens": 16000
+				"maxInputTokens": 1048576,
+				"maxOutputTokens": 65536
+			},
+			{
+				"id": "gemini-3.8-flash",
+				"name": "3.8 flash",
+				"url": "http://localhost:8787/v1/chat/completions",
+				"toolCalling": true,
+				"vision": true,
+				"maxInputTokens": 1048576,
+				"maxOutputTokens": 65536
+			},
+			{
+				"id": "gemini-3.7-flash",
+				"name": "3.7 flash",
+				"url": "http://localhost:8787/v1/chat/completions",
+				"toolCalling": true,
+				"vision": true,
+				"maxInputTokens": 1048576,
+				"maxOutputTokens": 65536
+			},
+			{
+				"id": "gemini-3.6-flash",
+				"name": "3.6 flash",
+				"url": "http://localhost:8787/v1/chat/completions",
+				"toolCalling": true,
+				"vision": true,
+				"maxInputTokens": 1048576,
+				"maxOutputTokens": 65536
 			},
 			{
 				"id": "gemini-3.5-flash",
@@ -101,8 +133,8 @@ To configure VS Code's GitHub Copilot to use this wrapper, add a custom endpoint
 				"url": "http://localhost:8787/v1/chat/completions",
 				"toolCalling": true,
 				"vision": true,
-				"maxInputTokens": 512000,
-				"maxOutputTokens": 16000
+				"maxInputTokens": 1048576,
+				"maxOutputTokens": 65536
 			},
 			{
 				"id": "gemini-3-flash-preview",
@@ -110,8 +142,17 @@ To configure VS Code's GitHub Copilot to use this wrapper, add a custom endpoint
 				"url": "http://localhost:8787/v1/chat/completions",
 				"toolCalling": true,
 				"vision": true,
-				"maxInputTokens": 512000,
-				"maxOutputTokens": 16000
+				"maxInputTokens": 1048576,
+				"maxOutputTokens": 65536
+			},
+			{
+				"id": "gemini-3.5-flash-lite",
+				"name": "3.5 flash lite",
+				"url": "http://localhost:8787/v1/chat/completions",
+				"toolCalling": true,
+				"vision": true,
+				"maxInputTokens": 1048576,
+				"maxOutputTokens": 65536
 			},
 			{
 				"id": "gemini-3.1-flash-lite",
@@ -119,9 +160,9 @@ To configure VS Code's GitHub Copilot to use this wrapper, add a custom endpoint
 				"url": "http://localhost:8787/v1/chat/completions",
 				"toolCalling": true,
 				"vision": true,
-				"maxInputTokens": 512000,
-				"maxOutputTokens": 16000
-			},
+				"maxInputTokens": 1048576,
+				"maxOutputTokens": 65536
+			}
 		]
 	}
 ]
