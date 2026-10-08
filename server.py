@@ -77,7 +77,10 @@ def extract_gemini_error(error_payload: str) -> tuple[int, str]:
     if isinstance(error, list):
         return 500, ", ".join(str(item) for item in error)
     if isinstance(error, dict):
-        message = error.get("message") or "Gemini returned an error"
+        violations = error.get("details")[1].get("violations")
+        message = ""
+        for violation in violations:
+            message += violation.get("quotaId")
         code = error.get("code", 500)
         return int(code), message
 
