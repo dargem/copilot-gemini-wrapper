@@ -96,6 +96,7 @@ class ModelUsage:
                 self.past_uses.append(Record(0, datetime.now(ZoneInfo("America/Los_Angeles"))))
         if record.TPM_error:
             self.past_uses.append(Record(self.limits.TPM, datetime.now(ZoneInfo("America/Los_Angeles"))))
+            self.rolling_TPM += self.limits.TPM
 
 # Info for a specific key, has multiple models
 class KeyInfo:

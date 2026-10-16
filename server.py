@@ -76,14 +76,24 @@ def extract_gemini_error(error_payload: str) -> tuple[int, str]:
     error = payload.get("error") if isinstance(payload, dict) else None
     if isinstance(error, list):
         return 500, ", ".join(str(item) for item in error)
-    if isinstance(error, dict):
-        violations = error.get("details")[1].get("violations")
-        message = ""
-        for violation in violations:
-            message += violation.get("quotaId")
-        code = error.get("code", 500)
-        return int(code), message
 
+    if isinstance(error, dict):
+        message = error.get("message") or "Gemini returned an error"
+        quota_ids = [
+            v.get("quotaId", "")
+            for detail in (error.get("details") or [])
+            if isinstance(detail, dict)
+            for v in (detail.get("violations") or [])
+            if isinstance(v, dict)
+        ]
+        if any(quota_ids):
+            message += f" [{', '.join(q for q in quota_ids if q)}]"
+        try:
+            code = int(error.get("code", 500))
+        except (TypeError, ValueError):
+            code = 500
+        return code, message
+    
     return 500, str(payload) if payload else "Gemini returned an invalid response"
 
 
@@ -150,7 +160,7 @@ async def chat_completions(request: Request):
     last_error_status = 500
     last_error_message = "Gemini did not return a valid response"
 
-    for _ in range(20):
+    while True:
         selected_model = body.get("model", "gemini_pooled")
         if selected_model not in model_limits.keys():
             if selected_model != "gemini_pooled":
@@ -216,6 +226,10 @@ async def chat_completions(request: Request):
                             parsed_chunk = json.loads(payload)
                         except json.JSONDecodeError:
                             logger.log(LogLevel.WARNING, f"Failed to JSON-decode Gemini SSE payload: {payload[:2000]}")
+                            continue
+
+                        if isinstance(parsed_chunk, list) or (isinstance(parsed_chunk, dict) and "error" in parsed_chunk):
+                            non_data_lines.append(payload)
                             continue
 
                         capture_signatures(parsed_chunk, index_to_id)
